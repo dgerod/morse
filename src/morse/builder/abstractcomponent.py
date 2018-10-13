@@ -131,8 +131,13 @@ class AbstractComponent(object):
 
     def __init__(self, obj=None, filename='', category=''):
         self.set_blender_object(obj)
-        self._resource_filename = filename # filename for datastream configuration
-        self.has_urdf = True if self._resource_filename.endswith(".urdf") else False
+
+        if not isinstance(filename, str):
+            self.has_urdf = False
+            self._resource_filename = ''
+        else:
+            self.has_urdf = True if filename.endswith(".urdf") else False
+            self._resource_filename = filename
 
         self._category = category # for morseable
         self.basename = None

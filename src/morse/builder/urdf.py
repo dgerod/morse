@@ -1,30 +1,21 @@
 import logging; logger = logging.getLogger("morsebuilder." + __name__)
-import math
+
+import os
+
+import rospkg
+from urdf_parser_py.urdf import URDF as URDFparser
+from urdf_parser_py.urdf import Mesh, Box, Cylinder, Sphere
+
 from morse.core.mathutils import Vector, Matrix, Euler
-import copy
-
 from morse.builder import bpymorse
-
-from morse.builder.creator import ComponentCreator
-
-
-URDFparser = None
-
-try:
-    from urdf_parser_py.urdf import URDF as URDFparser
-    from urdf_parser_py.urdf import Mesh, Box, Cylinder, Sphere
-except ImportError:
-    logger.error("[URDF] to load URDF files, you must first install urdf_parser_py")
-
 
 # Meshes are referenced in the URDF file relative to their package, eg:
 # 'package://pepper_meshes/meshes/1.0/Torso.dae'
 # MORSE will replace 'package://' by 'ROS_SHARE_ROOT':
-import os
 ROS_SHARE_ROOT=os.environ.get("ROS_PACKAGE_PATH","/opt/ros/kinetic/share").split(":")[0] + "/"
+ROS_PACKAGE_PATH = ""
 
 MATERIALS = {}
-
 EPSILON = 0.05
 
 class URDFLink:
@@ -370,7 +361,22 @@ class URDF:
 
     def __init__(self, urdf):
 
+        logger.debug("[URDF][init] - Begin")
+
         self.urdf_file = urdf
+
+        global ROS_PACKAGE_PATH
+
+        file_path = self.urdf_file
+        parent_path = os.path.abspath(os.path.join(file_path, os.pardir))
+        ROS_PACKAGE_PATH = os.path.abspath(os.path.join(parent_path, os.pardir))
+
+
+        logger.debug("[URDF][create_objects_by_link] file: %s" % file_path)
+        logger.debug("[URDF][create_objects_by_link] file: %s" % parent_path)
+        logger.debug("[URDF][create_objects_by_link] file: %s" % ROS_PACKAGE_PATH)
+
+
         if URDFparser is None:
             logger.error("[URDF] Can not load URDF file: urdf_parser_py not available")
             return
@@ -384,6 +390,8 @@ class URDF:
 
         self.base_link = URDFLink(self.urdf.link_map[self.urdf.get_root()])
         self.roots = self._walk_urdf(self.urdf.link_map[self.urdf.get_root()])
+
+        logger.debug("[URDF][init] - End")
 
     def _walk_urdf(self, link, parent_bone = None):
         bones = []
@@ -409,6 +417,9 @@ class URDF:
 
         :return: the root object created from the URDF file
         """
+
+        logger.debug("[URDF][build] - Begin")
+
         if self.urdf is None:
             return None
 
@@ -439,6 +450,7 @@ class URDF:
         for root in self.roots:
             root.build_objectmode(ob)
 
+        logger.debug("[URDF][build] - End")
         return ob
 
 def add_material(urdf_material):
@@ -471,8 +483,23 @@ def create_objects_by_link(link):
 
         if isinstance(geometry, Mesh):
 
-            path = geometry.filename.replace("package:/", ROS_SHARE_ROOT)
-            path = path.replace("file://", "")
+
+            import os
+
+            file_path = geometry.filename
+
+            if file_path.find("package://") != -1:
+                package_path = os.path.abspath(os.path.join(ROS_PACKAGE_PATH, os.pardir))
+                path = file_path.replace("package://", package_path + "/")
+
+            elif file_path.find("file://") != -1:
+                path = file_path.replace("file://", "")
+
+            else:
+                path = file_path
+
+            logger.debug("[URDF][create_objects_by_link] file: %s" % path)
+
             # Save a list of objects names before importing Collada/STL
             objects_names = [obj.name for obj in bpymorse.get_objects()]
 
