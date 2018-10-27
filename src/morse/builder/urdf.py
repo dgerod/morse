@@ -13,10 +13,12 @@ from morse.builder import bpymorse
 # 'package://pepper_meshes/meshes/1.0/Torso.dae'
 # MORSE will replace 'package://' by 'ROS_SHARE_ROOT':
 ROS_SHARE_ROOT=os.environ.get("ROS_PACKAGE_PATH","/opt/ros/kinetic/share").split(":")[0] + "/"
+
+URDF_DIRECTORY_PATH = ""
 ROS_PACKAGE_PATH = ""
 
 MATERIALS = {}
-EPSILON = 0.05
+EPSILON = 0.05 # This is the size of a bone in Blender
 
 class URDFLink:
 
@@ -129,6 +131,9 @@ class URDFJoint:
         # so we give it the global direction here.
         self.editbone.tail = self.rot * Vector((0, EPSILON, 0)) + self.editbone.head
 
+        import pdb
+        pdb.set_trace()
+
         for child in self.children:
             child.build_editmode(armature, self)
 
@@ -150,6 +155,13 @@ class URDFJoint:
 
     def configure_joint(self, posebone):
         self.posebone.lock_location = (True, True, True)
+        self.posebone.lock_rotation = (True, True, True)
+        self.posebone.lock_scale = (True, True, True)
+
+        self.posebone.lock_ik_x = True
+        self.posebone.lock_ik_y = True
+        self.posebone.lock_ik_z = True
+
         self.posebone.lock_rotation = (True, True, True)
         self.posebone.lock_scale = (True, True, True)
 
@@ -187,6 +199,7 @@ class URDFJoint:
 
             if ax: # x-axis
                 self.posebone.lock_rotation[0] = False
+                self.posebone.lock_ik_x = False
 
                 if self.limit:
                     c.use_limit_x = True
@@ -195,6 +208,7 @@ class URDFJoint:
 
             if ay: # y-axis
                 self.posebone.lock_rotation[1] = False
+                self.posebone.lock_ik_y = False
 
                 if self.limit:
                     c.use_limit_y = True
@@ -203,6 +217,7 @@ class URDFJoint:
 
             if az: # z-axis
                 self.posebone.lock_rotation[2] = False
+                self.posebone.lock_ik_z = False
 
                 if self.limit:
                     c.use_limit_z = True
@@ -220,6 +235,7 @@ class URDFJoint:
 
             if ax: # x-axis
                 self.posebone.lock_location[0] = False
+                self.posebone.lock_ik_x = False
 
                 if self.limit:
                     c.use_min_x = True
@@ -229,6 +245,7 @@ class URDFJoint:
 
             if ay: # y-axis
                 self.posebone.lock_location[1] = False
+                self.posebone.lock_ik_y = False
 
                 if self.limit:
                     c.use_min_y = True
@@ -238,6 +255,7 @@ class URDFJoint:
 
             if az: # z-axis
                 self.posebone.lock_location[2] = False
+                self.posebone.lock_ik_z = False
 
                 if self.limit:
                     c.use_min_z = True
@@ -251,12 +269,15 @@ class URDFJoint:
 
             if ax: # x-axis
                 self.posebone.lock_rotation[0] = False
+                self.posebone.lock_ik_x = False
 
             if ay: # y-axis
                 self.posebone.lock_rotation[1] = False
+                self.posebone.lock_ik_y = False
 
             if az: # z-axis
                 self.posebone.lock_rotation[2] = False
+                self.posebone.lock_ik_z = False
 
         else:
             logger.warning("[URDF] joint type ({}) configuration not implemented yet".format(self.type))
@@ -285,7 +306,7 @@ class URDFJoint:
             self.add_material(v)
 
             # parent the visuals to the armature
-            armature.data.bones[joint.name].use_relative_parent = True
+            armature.data.bones[joint.name].use_relative_parent = False
             v.parent = armature
             v.parent_bone = joint.name
             v.parent_type = "BONE"
@@ -365,17 +386,17 @@ class URDF:
 
         self.urdf_file = urdf
 
+        global URDF_DIRECTORY_PATH
         global ROS_PACKAGE_PATH
 
-        file_path = self.urdf_file
-        parent_path = os.path.abspath(os.path.join(file_path, os.pardir))
-        ROS_PACKAGE_PATH = os.path.abspath(os.path.join(parent_path, os.pardir))
 
+        file_path = self.urdf_file
+        URDF_DIRECTORY_PATH = os.path.abspath(os.path.join(file_path, os.pardir))
+        ROS_PACKAGE_PATH = os.path.abspath(os.path.join(URDF_DIRECTORY_PATH, os.pardir))
 
         logger.debug("[URDF][create_objects_by_link] file: %s" % file_path)
-        logger.debug("[URDF][create_objects_by_link] file: %s" % parent_path)
+        logger.debug("[URDF][create_objects_by_link] file: %s" % URDF_DIRECTORY_PATH)
         logger.debug("[URDF][create_objects_by_link] file: %s" % ROS_PACKAGE_PATH)
-
 
         if URDFparser is None:
             logger.error("[URDF] Can not load URDF file: urdf_parser_py not available")
@@ -487,6 +508,7 @@ def create_objects_by_link(link):
             import os
 
             file_path = geometry.filename
+            print(file_path)
 
             if file_path.find("package://") != -1:
                 package_path = os.path.abspath(os.path.join(ROS_PACKAGE_PATH, os.pardir))
@@ -495,9 +517,13 @@ def create_objects_by_link(link):
             elif file_path.find("file://") != -1:
                 path = file_path.replace("file://", "")
 
+            elif file_path.find("/") == 0:
+                path = file_path.replace("/", URDF_DIRECTORY_PATH + "/")
+
             else:
                 path = file_path
 
+            print(file_path)
             logger.debug("[URDF][create_objects_by_link] file: %s" % path)
 
             # Save a list of objects names before importing Collada/STL
